@@ -39,7 +39,7 @@ class AssemblyAIASR:
                     
                     logger.info("Got AssemblyAI token, connecting to WebSocket...")
                     
-                    # Connect to real-time WebSocket
+                    # Connect to real-time webSocket
                     self.websocket = await self.session.ws_connect(
                         f"wss://api.assemblyai.com/v2/realtime/ws?token={token}&sample_rate=16000"
                     )
