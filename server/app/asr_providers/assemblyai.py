@@ -44,7 +44,7 @@ class AssemblyAIASR:
                         f"wss://api.assemblyai.com/v2/realtime/ws?token={token}&sample_rate=16000"
                     )
                     
-                    # Start message listener here
+                    # Start message listener
                     asyncio.create_task(self._listen_messages())
                     
                     self.is_connected = True
