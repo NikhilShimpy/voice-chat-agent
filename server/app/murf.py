@@ -1,7 +1,7 @@
 import aiohttp
 import json
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,57 +10,100 @@ class MurfTTS:
         self.api_key = api_key
         self.base_url = "https://api.murf.ai/v1"
         
-    async def stream_tts(self, text: str, voice: str = "falcon_en_us") -> AsyncGenerator[bytes, None]:
+    async def stream_tts(self, text: str, voice: str = "en_us_001") -> AsyncGenerator[bytes, None]:
         """Stream TTS audio from Murf AI"""
         try:
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "api-key": self.api_key,
                 "Content-Type": "application/json"
             }
             
+            # Map voice IDs to Murf voice parameters
+            voice_map = {
+                "en_us_001": {"voiceId": "Ronnie", "model": "Falcon"},
+                "en_uk_001": {"voiceId": "Reece", "model": "Falcon"}, 
+                "en_au_001": {"voiceId": "Matilda", "model": "Falcon"}
+            }
+            
+            voice_params = voice_map.get(voice, {"voiceId": "Ronnie", "model": "Falcon"})
+            
+            # Murf API payload
             data = {
                 "text": text,
-                "voice": voice,
-                "format": "pcm16",
-                "sampleRate": 16000,
-                "channels": 1
+                "voiceId": voice_params["voiceId"],
+                "model": voice_params["model"],
+                "format": "MP3",
+                "sampleRate": 24000,
+                "channelType": "MONO",
+                "prosody": {
+                    "rate": "medium",
+                    "pitch": "medium"
+                }
             }
+            
+            logger.info(f"Murf TTS Request: {json.dumps(data, indent=2)}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self.base_url}/synthesize/stream",
+                    f"{self.base_url}/speech/generate",
                     headers=headers,
                     json=data
                 ) as response:
+                    
                     if response.status == 200:
-                        async for chunk in response.content.iter_chunks():
-                            if chunk[0]:  # chunk[0] is data, chunk[1] is EOF
-                                yield chunk[0]
+                        # Murf returns the complete audio file
+                        audio_data = await response.read()
+                        logger.info(f"Murf TTS Success: Generated {len(audio_data)} bytes of audio")
+                        
+                        # Return the audio data
+                        yield audio_data
+                        
+                    elif response.status == 402:
+                        error_text = await response.text()
+                        logger.error(f"Murf TTS credit limit exceeded: {error_text}")
+                        raise Exception("Murf TTS credit limit exceeded. Please check your Murf account.")
+                    elif response.status == 401:
+                        error_text = await response.text()
+                        logger.error(f"Murf TTS authentication failed: {error_text}")
+                        raise Exception("Murf TTS authentication failed. Please check your API key.")
                     else:
                         error_text = await response.text()
-                        logger.error(f"Murf TTS error: {error_text}")
-                        # Fallback to local TTS
-                        async for chunk in self._fallback_tts(text):
-                            yield chunk
-                            
+                        logger.error(f"Murf TTS API error {response.status}: {error_text}")
+                        raise Exception(f"Murf TTS error {response.status}: {error_text}")
+                        
         except Exception as e:
             logger.error(f"Murf TTS stream error: {e}")
-            # Fallback to local TTS
-            async for chunk in self._fallback_tts(text):
-                yield chunk
+            # Fallback - return empty audio
+            yield b""
     
-    async def _fallback_tts(self, text: str) -> AsyncGenerator[bytes, None]:
-        """Fallback TTS when Murf is unavailable"""
-        logger.info("Using fallback TTS")
-        # Simple fallback - in production, you might use pyttsx3 or other local TTS
-        # For now, return empty audio or a simple beep
-        yield b""  # Empty audio as fallback
-    
-    def get_available_voices(self) -> list:
+    async def get_available_voices(self) -> List[Dict[str, Any]]:
         """Get list of available Murf voices"""
-        # This would typically call Murf's voices endpoint
+        try:
+            headers = {
+                "api-key": self.api_key,
+                "Content-Type": "application/json"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.base_url}/studio/voices",
+                    headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get("voices", [])
+                    else:
+                        logger.error(f"Failed to fetch voices: {response.status}")
+                        return self._get_default_voices()
+                        
+        except Exception as e:
+            logger.error(f"Error fetching Murf voices: {e}")
+            return self._get_default_voices()
+    
+    def _get_default_voices(self) -> List[Dict[str, Any]]:
+        """Return default voice list if API fails"""
         return [
-            {"id": "falcon_en_us", "name": "Falcon US", "language": "en-US"},
-            {"id": "falcon_en_uk", "name": "Falcon UK", "language": "en-GB"},
-            {"id": "falcon_en_au", "name": "Falcon AU", "language": "en-AU"}
+            {"id": "en_us_001", "name": "Falcon US English (Ronnie)", "language": "en-US", "voiceId": "Ronnie", "model": "Falcon"},
+            {"id": "en_uk_001", "name": "Falcon UK English (Reece)", "language": "en-GB", "voiceId": "Reece", "model": "Falcon"},
+            {"id": "en_au_001", "name": "Falcon Australian English (Matilda)", "language": "en-AU", "voiceId": "Matilda", "model": "Falcon"}
         ]
