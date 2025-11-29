@@ -182,7 +182,6 @@ class AssemblyAIASR:
             except Exception as e:
                 logger.error(f"Error sending audio to AssemblyAI: {e}")
         else:
-            # Buffer audio for async processing
             self.audio_buffer.append(audio_data)
             logger.debug(f"Buffered audio chunk: {len(audio_data)} bytes (total: {len(b''.join(self.audio_buffer))})")
     
