@@ -119,7 +119,7 @@ class AssemblyAIASR:
             await self.websocket.send_str(json.dumps(start_msg))
             logger.info("Started AssemblyAI audio stream")
         else:
-            # Clear buffer for async processing
+            # Clear buffer for async Processing
             self.audio_buffer = []
             logger.info("Ready to buffer audio for async processing")
     
