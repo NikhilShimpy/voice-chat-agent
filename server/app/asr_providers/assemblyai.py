@@ -150,7 +150,6 @@ class AssemblyAIASR:
             
             logger.info(f"Processing {len(combined_audio)} bytes with AssemblyAI async API")
             
-            # Use a simple simulated response for now
             simulated_responses = [
                 "Hello! I can hear you're speaking. This is a simulated response since real-time ASR isn't available.",
                 "I understand you're trying to communicate. Please consider getting a Deepgram API key for real-time speech recognition.",
